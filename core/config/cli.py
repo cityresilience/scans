@@ -4,6 +4,7 @@ KNOWN_FLAGS = {
     "--collect", "--analyze", "--multianalysis", "--render",
     "--all", "--scan-id", "--multicity", "--parallel", "--auto-exit",
     "--upload", "--sync", "--keep", "--list", "--help", "--check",
+    "--worktree",
     "-e", "-t", "-k",
 }
 

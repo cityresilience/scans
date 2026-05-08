@@ -194,6 +194,11 @@ data/flood/*
 mnt/**
 inputs/secrets.yml
 
+# Per-scan data dirs — local only, never committed (canonical or city worktrees)
+01-user-input/
+02-process-output/
+03-render-output/
+
 # IDE / tooling
 .vscode/
 .claude/
