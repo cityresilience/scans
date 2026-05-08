@@ -1,4 +1,6 @@
-# City Scan
+# Scans
+
+> **Internal — WIP.** This is `cityresilience/scans`, used for internal sharing of per-scan branches via git worktrees. Currently public while testing as a fork; will be made private after leaving the fork network. The canonical public repo is [`cityresilience/city-scan`](https://github.com/cityresilience/city-scan).
 
 A City Scan is a rapid geospatial assessment of a city's demographic, socioeconomic, climate, and risk conditions. It is a collection of maps and charts made from global and publicly available datasets that provide quick high-level insights into resilience-related topics for a city. These scans are especially useful for grounding early-stage conversations in geospatial data.
 
