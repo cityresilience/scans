@@ -53,7 +53,14 @@ Data dirs (`01-/02-/03-`) are gitignored — regenerate via `scan --all` or pull
 scan --worktree <scan-id>
 ```
 
-Renames the existing folder aside, creates the branch + worktree, restores data dirs and customized code into the new worktree.
+> **Steps under the hood:**
+> 1. Rename `mnt/<scan-id>/` → `mnt/<scan-id>.temp/` (frees the path)
+> 2. `git worktree add mnt/<scan-id>` on a new branch forked from `scans/working` — folder is naturally scan-shape (only `core/`, `source/`, `tasks/`, `scan-calculations/`, `README.md`, `.gitignore`)
+> 3. Move non-code items from `.temp` back (data dirs `01-/02-/03-/.here`, local artifacts like `cache/`, `logs/`, `Rplots.pdf`, root-level files like `README.md`) — overwrites the fresh-from-`working` defaults
+> 4. Copy customized code (`core/`, `source/`, `tasks/`, `scan-calculations/`) from `.temp` on top of the worktree
+> 5. Delete `.temp`
+
+End result: a worktree on a new scan branch with all your customizations layered on top — ready for `git add -A && git commit && git push scans <scan-id>` when you want to share.
 
 
 ---

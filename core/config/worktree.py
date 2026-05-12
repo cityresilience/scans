@@ -118,7 +118,11 @@ def migrate_to_worktree(repo_root, scan_id):
             continue
         dst = scan_path / item.name
         if dst.exists():
-            continue
+            # Overwrite: lobito's version wins over the fresh-from-`working` default
+            if dst.is_dir():
+                shutil.rmtree(dst)
+            else:
+                dst.unlink()
         logger.info(f"  → {item.name}")
         item.rename(dst)
 
