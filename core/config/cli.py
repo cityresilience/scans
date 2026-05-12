@@ -3,13 +3,11 @@
 KNOWN_FLAGS = {
     "--collect", "--analyze", "--multianalysis", "--render",
     "--all", "--scan-id", "--multicity", "--parallel", "--auto-exit",
-    "--upload", "--sync", "--keep", "--list", "--help", "--check",
-    "--worktree",
+    "--upload", "--sync", "--keep", "--list", "--help",
     "-e", "-t", "-k",
 }
 
 SYNC_TARGETS = {"tasks", "source", "core", "scan-calculations"}
-CHECK_TARGETS = {"r", "python", "gee", "gcs", "quarto", "inputs"}
 
 
 def parse_args(args):
@@ -56,21 +54,6 @@ def parse_args(args):
     else:
         f['step'] = None
 
-    # --check targets (r, python, gee, gcs, quarto, inputs). No targets = all.
-    f['check'] = "--check" in args
-    f['check_targets'] = []
-    if f['check']:
-        idx = args.index("--check")
-        for a in args[idx + 1:]:
-            if a.startswith("-"):
-                break
-            if a in CHECK_TARGETS:
-                f['check_targets'].append(a)
-            else:
-                break
-        if not f['check_targets']:
-            f['check_targets'] = list(CHECK_TARGETS)
-
     # --scan-id value
     f['scan_id'] = None
     if "--scan-id" in args:
@@ -97,7 +80,6 @@ def parse_args(args):
         skip_values.add(f['scan_id'])
     skip_values.update(f['render_targets'])
     skip_values.update(f['sync_targets'])
-    skip_values.update(f['check_targets'])
     f['task_names'] = [a for a in args if not a.startswith("-") and a not in skip_values]
 
     return f

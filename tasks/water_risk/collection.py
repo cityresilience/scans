@@ -46,12 +46,6 @@ def datacollection(aoi, city_name, output_dir):
         logger.warning("No water risk data after clipping to AOI")
         return None
 
-    # WRI encodes NODATA as -9999 in raw score columns — replace with NaN so
-    # downstream binning/quantile logic ignores them instead of poisoning the scale.
-    import numpy as np
-    numeric_cols = gdf.select_dtypes(include="number").columns
-    gdf[numeric_cols] = gdf[numeric_cols].replace(-9999, np.nan)
-
     # Save
     spatial_dir = os.path.join(output_dir, "spatial")
     os.makedirs(spatial_dir, exist_ok=True)

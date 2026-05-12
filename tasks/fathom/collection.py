@@ -164,11 +164,6 @@ def _process_year(
                     spatial_dir,
                     tmp_mosaic_name
                 )
-                # mosaic_raster filters to existing tiles and silently no-ops
-                # when none exist — verify output actually got written before
-                # declaring success, otherwise fall through to next naming.
-                if not os.path.exists(tmp_mosaic_path):
-                    continue
                 mosaic_ok = True
                 break
             except Exception as e:

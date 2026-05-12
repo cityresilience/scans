@@ -2,3 +2,11 @@ layers:
   - wsf
   - wsf_tracker
   - wsf_harmonized
+  - wsf_harmonized_recent:
+      aggregate_mode: hexbin
+      aggregate_fun: q25
+  - wsf_harmonized_q33
+aggregate_mode: hexbin
+aggregate_fun: q25
+aggregate_size: 2400
+min_coverage: 0.1

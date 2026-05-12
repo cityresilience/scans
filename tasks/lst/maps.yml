@@ -1,2 +1,3 @@
 layers:
   - summer_lst
+aggregate_fun: mean

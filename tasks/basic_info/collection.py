@@ -93,20 +93,4 @@ def datacollection(aoi, city_name, country_name, output_dir):
         yaml.dump(basic_info, f)
 
     logger.info(f"basic_info.yml saved to: {output_path}")
-
-    # Benchmark city pop/density tables — produces _pop_benchmark.csv,
-    # _density_benchmark.csv, _pop_growth.csv. These feed the "Benchmark
-    # Cities" section of basic_info/charts/index.qmd. Runs via Rscript
-    # because benchmark-assembly.R reads worldpop + oxford CSVs via R.
-    # Requires worldpop's analyze outputs, so basic_info depends on worldpop.
-    import subprocess
-    try:
-        logger.info("Assembling benchmark-city tables...")
-        subprocess.run(
-            ["Rscript", "-e", "source(here::here('core/R/benchmark-assembly.R'))"],
-            check=True
-        )
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"benchmark-assembly failed: {e}")
-
     return basic_info

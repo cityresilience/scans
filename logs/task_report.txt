@@ -1,0 +1,30 @@
+Task Report: 2026-04-lobito_corridor
+==============================================================================================================
+task                 | step       | status   | source             | message                        | last update
+────────────────────-+-──────────-+-────────-+-──────────────────-+-──────────────────────────────-+-────────────────
+accessibility        | collect    | OK       |                    |                                | 2026-04-15 13:53
+accessibility        | analyze    | OK       |                    |                                | 2026-05-01 15:00
+buildings            | collect    | WARNING  |                    |                                | 2026-04-27 13:30
+buildings            | analyze    | skip     |                    |                                | 2026-04-27 13:30
+demographics         | collect    | —        |                    |                                | 2026-04-14 11:27
+demographics         | analyze    | —        |                    |                                | 2026-04-14 11:27
+earthquake           | collect    | OK       |                    |                                | 2026-04-21 09:01
+earthquake           | analyze    | skip     |                    |                                | 2026-04-21 09:01
+elevation            | analyze    | OK       |                    |                                | 2026-05-01 12:25
+fathom               | collect    | WARNING  |                    |                                | 2026-04-09 15:29
+fathom               | analyze    | WARNING  |                    |                                | 2026-04-20 14:56
+flood_events         | collect    | OK       |                    |                                | 2026-05-01 11:29
+flood_events         | analyze    | skip     |                    |                                | 2026-05-01 11:29
+gdp_sectoral         | collect    | OK       |                    |                                | 2026-04-20 15:26
+gdp_sectoral         | analyze    | skip     |                    |                                | 2026-04-20 15:26
+green                | collect    | OK       |                    |                                | 2026-04-08 14:47
+green                | analyze    | OK       |                    |                                | 2026-04-08 14:47
+ndmi                 | collect    | WARNING  |                    |                                | 2026-04-08 14:47
+ndmi                 | analyze    | skip     |                    |                                | 2026-04-08 14:47
+slope                | analyze    | OK       |                    |                                | 2026-05-01 12:25
+water_risk           | collect    | OK       |                    |                                | 2026-04-08 14:47
+water_risk           | analyze    | skip     |                    |                                | 2026-04-08 14:47
+worldpop             | collect    | OK       |                    |                                | 2026-04-14 11:27
+worldpop             | analyze    | OK       |                    |                                | 2026-04-14 11:27
+wsf                  | analyze    | OK       |                    |                                | 2026-04-30 14:58
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────

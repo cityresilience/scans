@@ -6,8 +6,8 @@ from core.py.log_module import setup_logger
 
 logger = setup_logger(__name__)
 
-BASE = "/vsicurl/https://storage.googleapis.com/city-scan-global-public/SectGDP30"
-# BASE = "/Users/vivaldirinaldi/Documents/Work/03-multi-scan-materials/SectGDP30"
+# BASE = "/vsicurl/https://storage.googleapis.com/city-scan-global-public/SectGDP30"  # GCS copy not yet updated
+BASE = "/Users/vivaldirinaldi/Documents/Work/03-multi-scan-materials/SectGDP30"
 
 SECTORS = ["Agriculture", "Industry", "Service"]
 YEARS = [2010, 2015, 2020]

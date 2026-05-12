@@ -16,12 +16,11 @@ template:
   stroke: 'TRUE if variable, color if static (defaults to FALSE)'
   weight: stroke weight
   suffix: NULL
-  domain: NULL
   # Potentially: NULL
-  # labFormat: NULL
-  # crop: crop domain to layer values - default of resolution or resolution_factor
-
-
+  domain: NULL
+  labFormat: NULL
+  crop: crop domain to layer values - default of  
+  # resolution or resolution_factor
 # SECTION 3 DEMOGRAPHICS
 population: # <-- We refer to this as the "YAML key" and is used to match generic and manual text
   fuzzy_string: (?<!dense_)population.tif$
@@ -30,7 +29,10 @@ population: # <-- We refer to this as the "YAML key" and is used to match generi
   palette: ['#ECEB72', '#8E3933']
   basemap: 'satellite'
   group_id: Population density # <-- This is the name shown in the leaflet layer control
-  bins: 5
+  bins: 6
+  min_value: 5
+  quantiles: [0, 0.5, 0.75, 0.9, 0.95, 0.99, 1.0] 
+  oob: censor
   caption: 'Map data from WorldPop Global2.'
 # population_2030:
 #   fuzzy_string: worldpop_2015_2030.tif$
@@ -122,10 +124,16 @@ gdp_combined:
 economic_activity:
   fuzzy_string: avg_rad_sum.*.tif$
   title: Economic activity
-  subtitle: 'Average nighttime light radiance'
+  subtitle: 'Percentile of average nighttime light radiance'
   group_id: Economic hotspots
   palette: ['#00a884', '#f0f0f0', '#e64c00']
+  # palette: ["#1c0f30", "#6929c4", "#d02670", "#fa4d56", "#ff8389"]
   bins: 5
+  binning_method: quantile
+  # min_value: 35
+  quantiles: [0, 0.50, 0.75, 0.90, 0.99, 1.0]
+  labels: ['0–50th', '50th–75th', '75th–90th', '90th–99th', '99th–100th']
+  # oob: squish
 economic_change:
   fuzzy_string: linfit.tif$
   title: Change in economic activity
@@ -143,7 +151,7 @@ wsf:
   # labels: ['Before 1986', '1986', '1996', '2006', '2015']
   # breaks: [1986, 1996, 2006, 2015] # Confusingly, if we are using discrete labels, need to remove minimum break
   labels: ['Before 1986', '1986-1995', '1996-2005', '2006-2015']
-  palette: ['#FBF9CD', '#E3B854', '#BF4A3B', '#25110B']
+  palette: ['#fddc69', '#ff832b', '#ba4e00', '#750e13', '#2d0709']
   group_id: Urban extent
   caption: 'Map data from World Settlement Footprint.'
 wsf_tracker:
@@ -152,17 +160,39 @@ wsf_tracker:
   breaks: [2016.5, 2017, 2020, 2023, 2026]
   data_variable: era
   labels: ['Before July 2016', 'By July 2019', 'By July 2022', 'By July 2025']
-  palette: ['#FBF9CD', '#D18158', '#25115B']
+  palette: ['#fddc69', '#ba4e00', '#2d0709']
   group_id: Urban extent, 2016–2024
+  oob: censor
 wsf_harmonized:
   fuzzy_string: wsf_harmonized.tif$
   title: Year of urban expansion, 1985–2025
   breaks: [1985, 1986, 1996, 2006, 2015, 2025]
   oob: censor
   labels: ['Before 1986', '1986-1995', '1996-2005', '2006-2015', '2016-2025']
-  palette: ['#FBF9CD', '#E3B854', '#D18158', '#BF4A3B', '#25110B']
+  palette: ['#fddc69', '#ff832b', '#ba4e00', '#750e13', '#2d0709']
   group_id: Urban extent harmonized
   caption: 'Map data from World Settlement Footprint.'
+wsf_harmonized_recent:
+  fuzzy_string: wsf_harmonized_recent_hex.gpkg$
+  data_variable: value
+  title: 'Built area since 2020'
+  subtitle: 'Square meters of built-up area per hex (last 5 years)'
+  palette: ['#fddc69', '#ff832b', '#ba4e00', '#750e13', '#2d0709']
+  bins: 4
+  binning_method: quantile
+  group_id: Recent built-up
+  caption: 'Map data from World Settlement Footprint (harmonized).'
+wsf_harmonized_q33:
+  fuzzy_string: wsf_harmonized_q33_hex.gpkg$
+  data_variable: value
+  title: 'Year of urban expansion, 1985–2025'
+  subtitle: 'Year by which 33% of hex built-up area was reached'
+  breaks: [1985, 1986, 1996, 2006, 2015, 2025]
+  oob: censor
+  labels: ['Before 1986', '1986-1995', '1996-2005', '2006-2015', '2016-2025']
+  palette: ['#fddc69', '#ff832b', '#ba4e00', '#750e13', '#2d0709']
+  group_id: Build year (1/3 threshold)
+  caption: 'Map data from World Settlement Footprint (harmonized).'
 ghs_builtup:
   fuzzy_string: built_over_time.tif$
   title: Built-up area
@@ -652,7 +682,7 @@ water_risk_groundwater:
   breaks: [0, 1, 2, 3, 4]
   labels: ['Low', 'Low-Medium', 'Medium-High', 'High', 'Extremely High']
   factor: TRUE
-  # oob: censor
+  oob: censor
   group_id: Groundwater Decline
 
 water_risk_depletion:
@@ -661,9 +691,11 @@ water_risk_depletion:
   title: 'Water Depletion'
   subtitle: 'WRI Aqueduct v4 (ratio of consumption to supply)'
   palette: ['#fef0d9', '#fdcc8a', '#fc8d59', '#e34a33', '#b30000']
-  breaks: [0, 0.25, 0.5, 0.75, 1.0]
-  labels: ['<25%', '25-50%', '50-75%', '>75%']
-  # oob: censor
+  # breaks: [0, 0.25, 0.5, 0.75, 1.0]
+  # labels: ['<25%', '25-50%', '50-75%', '>75%']
+  quantiles: [0, 0.25, 0.5, 1]
+  bins: 3
+  oob: censor
   group_id: Water Depletion
 
 

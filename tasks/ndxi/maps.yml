@@ -1,2 +1,4 @@
 layers:
   - vegetation
+  - drought
+aggregate_fun: mean

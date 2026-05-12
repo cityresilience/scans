@@ -13,6 +13,7 @@ execute:
 #| include: false
 if (file.exists("_quarto.yml")) here::i_am("tasks/slope/charts/index.qmd")
 if (!exists("aoi")) {
+  USE_GCS <<- FALSE
   source(here::here("core/R/setup.R"))
 }
 ```

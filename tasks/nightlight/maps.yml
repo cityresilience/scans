@@ -1,3 +1,4 @@
 layers:
   - economic_activity
   - economic_change
+aggregate_fun: mean

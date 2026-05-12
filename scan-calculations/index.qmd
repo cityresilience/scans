@@ -1,0 +1,51 @@
+---
+title: "Lobito Corridor City Scan"
+engine: knitr
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+USE_GCS <<- FALSE
+here::i_am("scan-calculations/index.qmd")
+source(here::here("core/R/setup.R"))
+source(here::here("core/R/fns.R"))
+source(here::here("core/R/pre-charting.R"))
+dir.create(here("03-render-output", "plots"), recursive = TRUE, showWarnings = FALSE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+{{< include ../tasks/basic_info/charts/index.qmd >}}
+
+{{< include ../tasks/worldpop/charts/index.qmd >}}
+
+{{< include ../tasks/demographics/charts/index.qmd >}}
+
+{{< include ../tasks/rwi/charts/index.qmd >}}
+
+{{< include ../tasks/wsf/charts/index.qmd >}}
+
+{{< include ../tasks/landcover/charts/index.qmd >}}
+
+{{< include ../tasks/elevation/charts/index.qmd >}}
+
+{{< include ../tasks/slope/charts/index.qmd >}}
+
+{{< include ../tasks/fathom/charts/index.qmd >}}
+
+{{< include ../tasks/gdp_sectoral/charts/index.qmd >}}
+
+{{< include ../tasks/flood_events/charts/index.qmd >}}
+
+{{< include ../tasks/earthquake/charts/index.qmd >}}
+
+{{< include ../tasks/cyclones/charts/index.qmd >}}
+
+{{< include ../tasks/solar/charts/index.qmd >}}
+
+{{< include ../tasks/fwi/charts/index.qmd >}}
+

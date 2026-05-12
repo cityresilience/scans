@@ -552,6 +552,139 @@ def road_orientation(graph, city_name, output_dir):
     os.makedirs(images_dir, exist_ok=True)
     fig.savefig(f'{images_dir}/{city_name}_road_orientation.png', dpi=300, bbox_inches='tight')
 
+def merge_custom_roads(graph, fgb_paths, snap_tol_m=50, default_highway="primary"):
+    """Inject custom road geometries (FGBs) as edges into an OSMnx MultiDiGraph.
+
+    Endpoints within ``snap_tol_m`` of an existing node snap to that node;
+    otherwise a new node is created. Each (Multi)LineString feature becomes one
+    bidirectional edge (key=0 + reverse) with metric ``length`` from a local UTM
+    projection and ``highway`` from the FGB attribute (falls back to
+    ``default_highway`` when missing). Subsequent FGBs see the new nodes added
+    by earlier ones (tree rebuilt between files).
+    """
+    from shapely.geometry import LineString, MultiLineString
+    from scipy.spatial import cKDTree
+    import numpy as np
+
+    if graph is None:
+        return graph
+    if not isinstance(graph, nx.MultiDiGraph):
+        graph = nx.MultiDiGraph(graph)
+
+    nodes_gdf = ox.graph_to_gdfs(graph, nodes=True, edges=False)
+    cx = nodes_gdf.geometry.x.mean()
+    cy = nodes_gdf.geometry.y.mean()
+    utm_zone = int((cx + 180) / 6) + 1
+    utm_crs = (
+        f"+proj=utm +zone={utm_zone}"
+        f"{' +south' if cy < 0 else ''} +datum=WGS84 +units=m +no_defs"
+    )
+
+    def build_tree():
+        ng = ox.graph_to_gdfs(graph, nodes=True, edges=False)
+        np_ = ng.to_crs(utm_crs)
+        ids = np_.index.tolist()
+        xy = np.array([(p.x, p.y) for p in np_.geometry])
+        return ids, xy, cKDTree(xy)
+
+    node_ids, node_xy, tree = build_tree()
+    next_node_id = max(graph.nodes) + 1
+
+    for fgb_path in fgb_paths:
+        if not os.path.exists(fgb_path):
+            logger.warning(f"FGB not found, skipping: {fgb_path}")
+            continue
+        gdf = gpd.read_file(fgb_path)
+        # drc_highways-edit.fgb has no CRS but coords match EPSG:3857
+        if gdf.crs is None:
+            gdf = gdf.set_crs(3857)
+        gdf = gdf.to_crs(4326)
+        if "highway" not in gdf.columns:
+            gdf["highway"] = default_highway
+        gdf["highway"] = gdf["highway"].fillna(default_highway)
+        gdf_proj = gdf.to_crs(utm_crs)
+
+        n_added = 0
+        for orig, proj, hw in zip(gdf.geometry, gdf_proj.geometry, gdf.highway):
+            if isinstance(orig, MultiLineString):
+                pairs = list(zip(orig.geoms, proj.geoms))
+            elif isinstance(orig, LineString):
+                pairs = [(orig, proj)]
+            else:
+                continue
+            for line_wgs, line_proj in pairs:
+                if line_wgs.is_empty or len(line_wgs.coords) < 2:
+                    continue
+                wgs_coords = list(line_wgs.coords)
+                proj_coords = list(line_proj.coords)
+
+                def snap_or_make(idx):
+                    nonlocal next_node_id
+                    px, py = proj_coords[idx]
+                    wx, wy = wgs_coords[idx]
+                    dist, k = tree.query([px, py], k=1)
+                    if dist <= snap_tol_m:
+                        return node_ids[k]
+                    nid = next_node_id
+                    next_node_id += 1
+                    graph.add_node(nid, x=wx, y=wy, street_count=0)
+                    return nid
+
+                u = snap_or_make(0)
+                v = snap_or_make(len(wgs_coords) - 1)
+                if u == v:
+                    continue
+                edge_len = float(line_proj.length)
+                graph.add_edge(u, v, key=0, length=edge_len, highway=hw,
+                               geometry=line_wgs, oneway=False)
+                graph.add_edge(v, u, key=0, length=edge_len, highway=hw,
+                               geometry=line_wgs, oneway=False)
+                n_added += 1
+
+        logger.info(f"Merged {n_added} edges from {os.path.basename(fgb_path)}")
+        # Rebuild snap tree so later FGBs can connect to nodes added by this one
+        node_ids, node_xy, tree = build_tree()
+
+    return graph
+
+
+def write_custom_major_roads_basemap(fgb_paths, output_dir, city_name,
+                                     default_highway="primary"):
+    """Write the FGB road sources (and only those) as ``{city}_major_roads.gpkg``.
+
+    Used by R's ``add_roads()`` underlay. OSM major roads are NOT included.
+    """
+    from os.path import exists
+    spatial_dir = os.path.join(output_dir, "spatial")
+    os.makedirs(spatial_dir, exist_ok=True)
+
+    parts = []
+    for fgb_path in fgb_paths:
+        if not exists(fgb_path):
+            logger.warning(f"FGB not found, skipping: {fgb_path}")
+            continue
+        gdf = gpd.read_file(fgb_path)
+        if gdf.crs is None:
+            gdf = gdf.set_crs(3857)
+        gdf = gdf.to_crs(4326)
+        if "highway" not in gdf.columns:
+            gdf["highway"] = default_highway
+        gdf["highway"] = gdf["highway"].fillna(default_highway)
+        keep = [c for c in ("highway", "name", "geometry") if c in gdf.columns]
+        parts.append(gdf[keep])
+
+    if not parts:
+        logger.warning("No custom roads loaded; major_roads.gpkg not written")
+        return
+
+    merged = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), crs=4326)
+    out_path = f"{spatial_dir}/{city_name}_major_roads.gpkg"
+    if exists(out_path):
+        os.remove(out_path)
+    merged.to_file(out_path, driver="GPKG", layer="major_roads")
+    logger.info(f"Custom-only major_roads saved to: {out_path}")
+
+
 def filter_major_roads(graph, output_dir, city_name):
     from os.path import exists
     spatial_dir = os.path.join(output_dir, "spatial")
@@ -568,9 +701,13 @@ def filter_major_roads(graph, output_dir, city_name):
         roads_gdf = gpd.read_file(f'{spatial_dir}/{city_name}_nodes_and_edges.gpkg', layer='edges')
 
         # Filter for major roads based on keywords in the 'highway' attribute
-        major_road_keywords = ['primary', 'trunk', 'motorway', 'primary_link', 'trunk_link', 'motorway_link']
+        major_road_keywords = ['primary', 'trunk', 'motorway', 'secondary', 'tertiary', 'primary_link', 'trunk_link', 'motorway_link', 'secondary_link', 'tertiary_link']
 
         # Filter for major roads using a lambda function
         major_roads_gdf = roads_gdf[roads_gdf['highway'].apply(lambda highway_value: any(keyword in highway_value for keyword in major_road_keywords))]
-        major_roads_gdf.to_file(f'{spatial_dir}/{city_name}_major_roads.gpkg', driver='GPKG', layer = 'major_roads')
+        # Remove existing file so to_file writes fresh — GPKG layer overwrite is unreliable
+        out_path = f'{spatial_dir}/{city_name}_major_roads.gpkg'
+        if exists(out_path):
+            os.remove(out_path)
+        major_roads_gdf.to_file(out_path, driver='GPKG', layer = 'major_roads')
         logger.info(f"major roads saved to: {spatial_dir}/{city_name}_major_roads.gpkg")

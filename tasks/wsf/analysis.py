@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import rasterio
+from glob import glob
 from rasterio.io import MemoryFile
 from rasterio.mask import mask
 from rasterio.warp import reproject, Resampling, calculate_default_transform
@@ -167,7 +168,6 @@ def _resample_to_target(data, src_meta, target_meta, method=Resampling.nearest):
 
 
 def harmonize_wsf(
-        aoi: gpd.GeoDataFrame,
         city_name: str,
         output_dir: str,
         dist_thresh: int = 10,
@@ -242,18 +242,35 @@ def harmonize_wsf(
 
     disputed = (trk_mode == 2016).values & ~(evo.values > 0)
 
-    # Auto dist_thresh: 90th percentile of disputed-pixel distances. For dense
-    # cities this stays small (~5-10px); for sparse corridors (e.g. Lobito) it
-    # scales up automatically so distant rural dev gets backdated too instead
-    # of piling into the tracker-2016 bucket and producing an artificial spike.
+    # Auto dist_thresh: Otsu's method on disputed-pixel distance distribution,
+    # clamped to [3, ceiling] px. Floor 3px (~90m) handles resolution-mismatch
+    # undercount on any city. Ceiling is adaptive: median distance from non-evo
+    # pixels to nearest evo, capturing the AOI's typical evo reach. Dense cities
+    # → tight ceiling; sparse corridors (e.g., Lobito) → looser ceiling.
     disputed_dists = distances[disputed]
     if disputed_dists.size > 0:
-        auto_thresh = int(np.ceil(np.percentile(disputed_dists, 90)))
+        d_int = disputed_dists.astype(int)
+        counts = np.bincount(d_int)
+        total = counts.sum()
+        cum = np.cumsum(counts)
+        cum_w = np.cumsum(counts * np.arange(len(counts)))
+        w0 = cum / total
+        w1 = 1.0 - w0
+        m0 = np.where(cum > 0, cum_w / np.maximum(cum, 1), 0.0)
+        m1 = np.where(total - cum > 0, (cum_w[-1] - cum_w) / np.maximum(total - cum, 1), 0.0)
+        var_between = w0 * w1 * (m0 - m1) ** 2
+        otsu_raw = int(np.argmax(var_between))
+        # Adaptive ceiling = median distance from non-evo pixels to nearest evo
+        non_evo_mask = ~(evo_clean_vals > 0)
+        ceiling = max(int(np.ceil(np.median(distances[non_evo_mask]))), 5)
+        auto_thresh = int(np.clip(otsu_raw, 3, ceiling))
         median_d = int(np.median(disputed_dists))
+        p90 = int(np.ceil(np.percentile(disputed_dists, 90)))
         logger.info(
-            f"Auto dist_thresh: {auto_thresh} pixels "
-            f"(~{auto_thresh * 30}m at 30m res) | "
-            f"median disputed dist: {median_d}px, 90th: {auto_thresh}px, "
+            f"Otsu dist_thresh: {auto_thresh} pixels "
+            f"(~{auto_thresh * 30}m at 30m res, raw otsu={otsu_raw}, "
+            f"clamped to [3,{ceiling}] — ceiling=evo median reach) | "
+            f"median disputed dist: {median_d}px, 90th: {p90}px, "
             f"manual default was {dist_thresh}"
         )
         dist_thresh = auto_thresh
@@ -281,6 +298,10 @@ def harmonize_wsf(
     logger.info(f"Saved raster: {output_tif}")
 
     # Clip to AOI for stats only
+    aoi_dir = os.path.join(os.path.dirname(output_dir), '01-user-input', 'AOI')
+    aoi_file = glob(os.path.join(aoi_dir, '*.shp'))[0]
+    aoi = gpd.read_file(aoi_file).to_crs(4326)
+
     evo_aoi = evo.rio.clip(aoi.geometry)
     evo_c_aoi = evo_c.rio.clip(aoi.geometry)
     trk_mode_aoi = trk_mode.rio.clip(aoi.geometry)

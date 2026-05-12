@@ -2,3 +2,4 @@ layers:
   - ghs_builtup
   - builtup_projected
   - impervious
+aggregate_fun: mean

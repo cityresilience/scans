@@ -239,3 +239,77 @@ def _stale(path):
     return age > timedelta(days=MAX_AGE_DAYS)
 
 
+def fetch_network(aoi_4326, network_type="all", cache_dir=None):
+    """
+    Fetch a road network graph for the AOI via Geofabrik PBF.
+
+    Mirrors fetch_features() but returns a NetworkX MultiDiGraph compatible
+    with osmnx (osmid/highway/length attrs preserved by pyrosm.to_graph).
+
+    Parameters
+    ----------
+    aoi_4326 : GeoDataFrame in EPSG:4326
+    network_type : str
+        Pyrosm network_type: "all", "driving", "walking", "cycling", etc.
+    cache_dir : Path, optional
+
+    Returns
+    -------
+    networkx.MultiDiGraph or None
+    """
+    cache_dir = Path(cache_dir) if cache_dir else _default_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    _, _, iso3_list = find_country(aoi=aoi_4326)
+    logger.info(f"PBF backend (network): countries {iso3_list}")
+
+    bbox = aoi_4326.total_bounds  # (minx, miny, maxx, maxy)
+
+    graphs = []
+    for iso3 in iso3_list:
+        pbf_path = _download_country_pbf(iso3, cache_dir)
+        if pbf_path is None:
+            continue
+        g = _load_network(pbf_path, network_type, bbox)
+        if g is not None and len(g.edges) > 0:
+            graphs.append(g)
+
+    if not graphs:
+        logger.info("PBF backend: no network features matched.")
+        return None
+
+    if len(graphs) == 1:
+        combined = graphs[0]
+    else:
+        import networkx as nx
+        combined = nx.compose_all(graphs)
+
+    logger.info(
+        f"PBF backend: {len(combined.nodes):,} nodes, "
+        f"{len(combined.edges):,} edges across {len(graphs)} country file(s)"
+    )
+    return combined
+
+
+def _load_network(pbf_path, network_type, bbox):
+    """Load a road network from a PBF as a NetworkX graph (via pyrosm)."""
+    try:
+        from pyrosm import OSM
+    except ImportError:
+        raise ImportError(
+            "pyrosm is required for AOIs > 5000 km² (Geofabrik PBF route). "
+            "Install with: conda install -c conda-forge pyrosm"
+        )
+
+    osm = OSM(str(pbf_path), bounding_box=list(bbox))
+    nodes, edges = osm.get_network(network_type=network_type, nodes=True)
+
+    if edges is None or len(edges) == 0:
+        logger.info(f"  No network in {pbf_path.name}")
+        return None
+
+    g = osm.to_graph(nodes, edges, graph_type="networkx")
+    logger.info(f"  Loaded {len(g.edges):,} edges from {pbf_path.name}")
+    return g
+
+

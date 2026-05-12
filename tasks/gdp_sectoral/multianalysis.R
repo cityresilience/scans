@@ -53,6 +53,14 @@ for (sector in sectors) {
         flood_max <- flood_r[[1]]
         flood_max <- crop(flood_max, aoi, mask = TRUE)
 
+        # Pre-aggregate flood raster so values()/resample doesn't blow R's
+        # vector memory cap on huge AOIs (Lobito corridor = ~276M cells native)
+        target_cells <- 2e6
+        if (ncell(flood_max) > target_cells) {
+          fact <- ceiling(sqrt(ncell(flood_max) / target_cells))
+          flood_max <- aggregate(flood_max, fact = fact, fun = "max", na.rm = TRUE)
+        }
+
         # Resample high GDP mask to flood resolution
         high_gdp_resampled <- resample(high_gdp_mask, flood_max, method = "near")
         flood_mask <- flood_max > 0 & !is.na(flood_max)

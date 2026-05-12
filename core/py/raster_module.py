@@ -151,28 +151,17 @@ def mosaic_raster(mosaic_list, local_output_dir, mosaic_file, method = 'first'):
     import rasterio
     from rasterio.merge import merge
 
-    # Filter to only existing files (cloud paths may 404).
-    # Use rasterio (always available via requirements.txt) — opening in read
-    # mode hits GDAL's internal stat/HEAD without loading data. Silence the
-    # rasterio._env logger during probes so expected 404s on non-existent
-    # tiles (e.g. fallback naming attempts) don't spam the user's console.
-    import logging
-    rio_env_logger = logging.getLogger('rasterio._env')
-    prev_level = rio_env_logger.level
-    rio_env_logger.setLevel(logging.ERROR + 1)
-    try:
-        valid_list = []
-        for p in mosaic_list:
-            if p.startswith('/vsi'):
-                try:
-                    with rasterio.open(p):
-                        valid_list.append(p)
-                except rasterio.errors.RasterioIOError:
-                    continue
-            elif os.path.exists(p):
+    # Filter to only existing files (cloud paths may 404)
+    from osgeo import gdal
+    valid_list = []
+    for p in mosaic_list:
+        if p.startswith('/vsi'):
+            # Use GDAL stat for cloud paths — lightweight HEAD request, no data loaded
+            stat = gdal.VSIStatL(p)
+            if stat is not None:
                 valid_list.append(p)
-    finally:
-        rio_env_logger.setLevel(prev_level)
+        elif os.path.exists(p):
+            valid_list.append(p)
     mosaic_list = valid_list
 
     if len(mosaic_list) > 1:

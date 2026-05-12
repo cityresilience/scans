@@ -1,3 +1,12 @@
 layers:
   - population
-aggregate_fun: sum
+aggregate_fun: mean
+
+# Optional: pre-hex raster smoothing. Uncomment to enable.
+# Produces {layer}_smooth and feeds the smoothed raster into the hex path.
+# Methods: gaussian (weighted, continuous), median (continuous, preserves peaks),
+#          modal (categorical/temporal — not appropriate for population).
+# smoothing:
+#   method: gaussian
+#   sigma: 1
+#   window: 3

@@ -1,52 +1,34 @@
 import os
 import ee
-import google.auth
 from core.py.log_module import setup_logger
 
 logger = setup_logger(__name__)
 
-_GEE_SCOPES = [
-    "https://www.googleapis.com/auth/earthengine",
-    "https://www.googleapis.com/auth/cloud-platform",
-]
+GEE_PROJECT = os.environ.get("GEE_PROJECT", "city-scan-gee-test")
 
 
 def _on_cloud_run():
     return os.environ.get("K_SERVICE") is not None
 
 
-def _gee_credentials():
-    """Resolve ADC with EE scopes. Supports Cloud Run SA injection,
-    GOOGLE_APPLICATION_CREDENTIALS, and local gcloud ADC."""
-    creds, detected_project = google.auth.default(scopes=_GEE_SCOPES)
-    project = os.environ.get("GEE_PROJECT", detected_project)
-    return creds, project
-
-
 def init_gee():
-    """Initialize GEE with explicit credentials from google.auth.default().
+    """Initialize Google Earth Engine.
 
-    Supports three credential tiers without hardcoding any account or project:
-      1. Cloud Run service account (ADC injected by runtime)
-      2. GOOGLE_APPLICATION_CREDENTIALS env var (service account key file)
-      3. Local gcloud ADC (created with the earthengine scope)
-
-    Does NOT interactively authenticate — that would hang a task run.
-    If resolution fails, raises with a clear instruction to run `scan --check gee`.
+    - Cloud Run: uses the service account's ADC automatically.
+    - Local: tries existing credentials first, falls back to
+      ee.Authenticate(auth_mode='gcloud') if not authenticated.
     """
     try:
-        creds, project = _gee_credentials()
-        ee.Initialize(credentials=creds, project=project)
-        logger.info(f"GEE initialized (project={project})")
-        return
-    except Exception as e:
-        raise RuntimeError(
-            f"GEE authentication failed ({e}). Run `scan --check gee` for a guided fix, or:\n"
-            "  gcloud auth application-default login \\\n"
-            "    --scopes=openid,https://www.googleapis.com/auth/userinfo.email,"
-            "https://www.googleapis.com/auth/cloud-platform,"
-            "https://www.googleapis.com/auth/earthengine"
-        ) from e
+        ee.Initialize(project=GEE_PROJECT)
+    except Exception:
+        logger.info("GEE credentials not found, authenticating via gcloud...")
+        ee.Authenticate(auth_mode="gcloud",  scopes=[
+                "https://www.googleapis.com/auth/earthengine",
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/devstorage.full_control",
+            ],)
+        ee.Initialize(project=GEE_PROJECT)
+    logger.info(f"GEE initialized (project={GEE_PROJECT})")
 
 
 def init_gcs():

@@ -1,2 +1,3 @@
 layers:
   - solar
+aggregate_fun: mean

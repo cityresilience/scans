@@ -1,130 +1,46 @@
-# Scan Sharing
-> **Internal — WIP**. This is cityresilience/scans, used for internal sharing of per-scan branches via git worktrees. Currently public while testing as a fork; will be made private after leaving the fork network. The canonical public repo is cityresilience/city-scan
+# Lobito Corridor — Custom Scripts
 
-Ideas on how per-scan customizations can be shared using git, instead of manual file copying.
+>The scan was done before the reorg of `core/R`, but functionally should be the same. 
 
+#### Road network — `tasks/accessibility/`
 
-Two repos:
-- `cityresilience/city-scan` — public code. Canonical branch `unified` (for now). 
-- `cityresilience/scans` — private internal repo. Default branch `working`. Holds one branch per `mnt/<scan-id>/`. The `working` branch is the stripped scan-shape template (only `core/`, `source/`, `tasks/`, `scan-calculations/`).
+Merge manuallly edited roadnetwork with OSM data via HDX
 
-**Idea:** Each scan in `mnt/` is a git worktree of `scans`, on a branch named after the scan-id (e.g. `2026-04-lobito_corridor`), forked from `working`. Because `working` only contains the scan-shape dirs, every scan worktree is naturally clean and do not carry bloat (`docs/`, `inputs/`, `notebook/`, `orchestrator.sh`, etc.).
+**Files:** `tasks/accessibility/__init__.py`, `tasks/accessibility/analysis.py`
 
-<!-- ![Scan sharing architecture](workflow-scan-sharing.png) -->
-
----
-
-## 1. One-time setup
-
-```bash
-cd ~/Documents/Work/city-scan-automation (or any local repo)
-git remote add scans https://github.com/cityresilience/scans.git
-git fetch scans
-git checkout working
-```
-
-`working` is the local branch in the main folder. Bloat files (`docs/`, `inputs/`, `notebook/`, etc.) stay on disk locally as untracked — they're not tracked on `working`.
-
---- 
-## 2. Get a scan into `mnt/`
-
-Three ways depending on starting state.
-
-### a. New scan from scratch
-
-```bash
-scan --all --worktree
-```
-
-Creates branch `<scan-id>` on scans (off `working`), runs `git worktree add mnt/<scan-id>`, then collection/analysis.
-
-### b. Pull a scan from GitHub
-
-```bash
-git fetch scans
-git worktree add -b <scan-id> mnt/<scan-id> scans/<scan-id>
-```
-
-Data dirs (`01-/02-/03-`) are gitignored — regenerate via `scan --all` or pull from GCS.
-
-### c. Migrate an existing cp-r scan
-
-```bash
-scan --worktree <scan-id>
-```
-
-Renames the existing folder aside, creates the branch + worktree, restores data dirs and customized code into the new worktree.
+**Adds:**
+- `merge_custom_roads(graph, fgb_paths, snap_tol_m=50)` — snaps FGB lines onto OSM nodes within tolerance, adds them as new edges
+- `write_custom_major_roads_basemap(...)` — writes the FGB-only basemap underlay for the static map
+- `__init__.py` collect step appends `drc_highways-edit.fgb` and `additional-connector-roads.fgb` after the OSM road download
 
 
----
-## 3. Pulling Scans from Google Cloud
 
-**TODO:** implement a way to start a scan from GCS, use --GCS flag.
+#### PBF road-graph helper — `core/py/osm_pbf.py`
+ Adds `fetch_network(aoi_4326, network_type, cache_dir)` — multi-country PBF download + pyrosm parse + `networkx.compose_all`. Same idea I patched into zambia inline, but generalized. 
 
----
-## 4. Edit + push
 
-Inside a scan worktree, commits go to that scan's branch when ready to share:
 
-```bash
-cd mnt/2026-04-lobito_corridor
-git add .
-git commit -m "tune flood breaks"
-git push scans 2026-04-lobito_corridor
-```
+#### `source/layers.yml` (+32 lines vs root)
+Corridor-tuned color ramps, breakpoints, and labels for layers rendered at corridor scale. Likely contains lobito-specific scale tweaks.
 
-The main folder (on `working`) is unaffected by edits inside the worktree.
+#### Per-task maps.yml — hex aggregation params
 
----
+Mostly tuning the hex aggregation: aggregate_fun (mean/sum/q25/q33), aggregate_mode: hexbin, aggregate_size, min_coverage. A few add smoothing config (gaussian/median/modal).
+#### Map-rendering R scripts — `core/R/map-*.R`
 
-## 5. Sync ** STILL EXPERIMENTAL **
+Corridor-scale rasters force extra aggregation/masking before plotting.
 
-### a. Pull `working` updates into a scan
+- **`map-flooding.R`** — reads `aggregate_mode` / `aggregate_size` / `aggregate_fun` / `min_coverage` / `smoothing` from `tasks/fathom/maps.yml`; crops with `mask = TRUE`; conditionally calls `cell_aggregate()` when `aggregate_mode == "resample"`.
+- **`map-gdp-flood.R`** and **`map-sectoral-gdp-flood.R`** — crop with `mask = TRUE` and call `aggregate_if_too_fine(flood_data, threshold = 1e6, fun = "max")` to downsample huge rasters before plotting. 
+- **`map-schools-health-proximity.R`** — calls `add_builtup_hatch(plots$..., underlay = TRUE)`
 
-When the main folder (on `working`) has updates you want in your scan:
 
-```bash
-scan --scan-id <scan-id> --sync                  # all targets
-scan --scan-id <scan-id> --sync tasks            # specific targets
-```
 
-Per-scan, on-demand. Dormant scans don't need it.
 
-### b. Backport a scan fix to `working` (`--syncback`) ** to be implemented **
 
-```bash
-scan --scan-id <scan-id> --syncback core/R/some-fix.R
-```
 
-Would copy a file from the scan worktree into the main folder's working tree (on `working`). Not in the CLI yet.
+### Stale files — port from root when syncing
 
-### c. Bring upstream city-scan updates into `working`
+Lobito predates the unified refactor — most of core/R, core/config, core/py/raster_module.py, tasks/__main__.py, and tasks/*/collection.py (basic_info, coastal_erosion, fathom, landcover, water_risk, wsf) are just older versions
 
- When `cityresilience/city-scan/unified` has new commits,  pull only the scan-shape dirs (because `working` is a stripped subset):
 
-```bash
-git fetch city-scan
-git checkout working
-git checkout city-scan/unified -- core source tasks scan-calculations
-```
-
-**TODO:** Maybe this could be another flag like --pull? 
-
-> Note: `--sync`, `--syncback`, and the `git checkout` above are all local file operations. Commit + push to `scans working` (or the scan branch) only when you have changes to share — see section 4.
-
----
-
-## 6. Remove a worktree
-
-```bash
-git worktree remove mnt/<scan-id>
-git branch -D <scan-id>
-git push scans --delete <scan-id>   # only if you want to drop the remote branch too
-```
-
----
-## Notes
-
-- `01-user-input/`, `02-process-output/`, `03-render-output/` are gitignored — never committed.
-- Same branch can only be checked out in one worktree at a time per clone. We can each have `mnt/<scan-id>/` locally — those are independent worktrees pointing at the same scans branch.
-- `--worktree` and `--syncback` (to be implemented) are pipeline conveniences. Under the hood they're plain `git worktree add` / `cp` operations.

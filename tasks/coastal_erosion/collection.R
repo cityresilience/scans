@@ -210,10 +210,8 @@ if (is.null(shoreline_csv) || length(shoreline_csv) == 0 || !file.exists(shoreli
         geometry = st_sfc(polys, crs = 4326)
       )
 
-      # Crop to AOI (with 10km buffer — ShorelineMonitor transect points sit
-      # offshore of the AOI polygon; 1km was too tight for coastal AOIs whose
-      # western edge stops at the shore rather than extending over water).
-      bar_sf <- bar_sf[st_intersects(bar_sf, aoi %>% buffer(10000) %>% st_as_sf(), sparse = FALSE)[, 1], ]
+      # Crop to AOI (with 1km buffer for coastline)
+      bar_sf <- bar_sf[st_intersects(bar_sf, aoi %>% buffer(1000) %>% st_as_sf(), sparse = FALSE)[, 1], ]
       bar_sf
     }
 

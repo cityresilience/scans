@@ -13,6 +13,7 @@ High GDP areas are defined as pixels above the 60th percentile of GDP values wit
 ```{r setup, message=FALSE, warning=FALSE, results='hide'}
 if (file.exists("_quarto.yml")) here::i_am("tasks/gdp_sectoral/charts/index.qmd")
 if (!exists("aoi")) {
+  USE_GCS <<- FALSE
   source(here::here("core/R/setup.R"))
 }
 ```

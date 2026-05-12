@@ -114,26 +114,6 @@ def main():
         return
 
     # =========================================================
-    # WORKTREE MIGRATION (intercept before normal scan flow)
-    # `scan --worktree <scan-id>` — convert mnt/<scan-id>/ to a git worktree.
-    # No other flags allowed; pure migration command.
-    # =========================================================
-    if "--worktree" in args and "--all" not in args:
-        from core.config.worktree import migrate_to_worktree
-        positional = [a for a in args if not a.startswith("-")]
-        if len(positional) != 1:
-            logger.error("Usage: scan --worktree <scan-id>")
-            return
-        scan_id = positional[0]
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        try:
-            migrate_to_worktree(repo_root, scan_id)
-        except (FileNotFoundError, FileExistsError) as e:
-            logger.error(str(e))
-            sys.exit(1)
-        return
-
-    # =========================================================
     # VALIDATE & PARSE
     # =========================================================
     err = validate_args(args)

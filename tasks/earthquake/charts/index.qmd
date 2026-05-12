@@ -40,9 +40,11 @@ if (is.null(eq) || nrow(eq) == 0) print_text(paste_bold('No earthquake data avai
   }
 
   # Ensure NCEI columns exist even when only USGS rows are present (avoids missing-column errors).
+  # Use NA_real_ — plain NA is logical, which breaks scales::label_comma() (round_any
+  # via if_else evaluates both branches, and the "TRUE" branch runs even when zero rows match).
   for (col in c("damageAmountOrder", "damageMillionsDollars", "deaths", "deathsAmountOrder",
                 "intensity", "tsunamiEventId")) {
-    if (!col %in% names(eq)) eq[[col]] <- NA
+    if (!col %in% names(eq)) eq[[col]] <- NA_real_
   }
 
   USGS_MIN_MAG <- 4.5  # USGS-only rows surface at this floor; NCEI rows use the curated significance OR-chain
