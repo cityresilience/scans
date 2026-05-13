@@ -19,8 +19,11 @@ def collect(scan):
 
 
 def analyze(scan):
+    import os
     from .collection import graph_collection
-    from .analysis import calc_basic_stats, filter_major_roads, network_plot, road_orientation, compute_graph_centralities, compute_accessibility_analysis
+    from .analysis import (calc_basic_stats, filter_major_roads, network_plot,
+        road_orientation, compute_graph_centralities, compute_accessibility_analysis,
+        merge_custom_roads, write_custom_major_roads_basemap)
 
     logger.info("Analyzing accessibility data...")
     network_graph = graph_collection(
@@ -28,8 +31,20 @@ def analyze(scan):
         output_dir=scan.output_dir, buffer=5000,
         network_type='all', simplify=True, return_graph=True
     )
-    filter_major_roads(graph = network_graph, 
-                       output_dir=scan.output_dir, 
+
+    # Merge zambia's manually-edited highway segments into the road graph
+    # so centralities reflect the curated network; basemap underlay = custom only.
+    custom_road_paths = [
+        os.path.join(scan.output_dir, "spatial", "zmb-highways-edit.geojson"),
+    ]
+    network_graph = merge_custom_roads(network_graph, custom_road_paths, snap_tol_m=50)
+    write_custom_major_roads_basemap(
+        fgb_paths=custom_road_paths,
+        output_dir=scan.output_dir,
+        city_name=scan.city_name)
+
+    filter_major_roads(graph = network_graph,
+                       output_dir=scan.output_dir,
                        city_name=scan.city_name)
 
     calc_basic_stats(

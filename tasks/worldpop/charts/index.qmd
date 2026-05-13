@@ -11,6 +11,7 @@ execute:
 ```{r setup, message=FALSE, warning=FALSE, results='hide'}
 if (file.exists("_quarto.yml")) here::i_am("tasks/worldpop/charts/index.qmd")
 if (!exists("aoi")) source(here::here("core/R/setup.R"))
+source(here::here("core/R/benchmark-assembly.R"))
 source("https://raw.githubusercontent.com/compoundrisk/monitor/databricks/src/fns/helpers.R")
 ```
 
@@ -234,6 +235,68 @@ if (nrow(wp_ridge) > 0) {
          plot = p_density, width = 8, height = 4, dpi = 300)
   p_density
 }
+```
+
+### Population Density by Corridor City
+
+```{r chart-worldpop-density-ridge-cities, message=FALSE, warning=FALSE}
+#| label: chart-worldpop-density-ridge-cities
+
+tryCatch({
+  librarian::shelf(ggridges, exactextractr)
+
+  pop_file <- list.files(spatial_dir, pattern = "_population\\.tif$", full.names = TRUE) %>%
+    str_subset("dense", negate = TRUE)
+
+  if (length(pop_file) > 0 && exists("city_labels") && !is.null(city_labels)) {
+    wpop_rast <- rast(pop_file[1])
+
+    # Per-city pixel values via exact_extract (coverage-weighted, keeps
+    # partial-pixel contributions at polygon edges)
+    cities_sf <- sf::st_as_sf(city_labels) %>%
+      sf::st_transform(terra::crs(wpop_rast))
+    vals_list <- exact_extract(wpop_rast, cities_sf, progress = FALSE)
+
+    pop_city_df <- purrr::map2_dfr(
+      vals_list, cities_sf$GC_UCN_MAI_2025,
+      ~ tibble(pop = .x$value, city = .y)
+    ) %>%
+      filter(!is.na(pop), pop > 0)
+
+    if (nrow(pop_city_df) > 0) {
+      x_max <- quantile(pop_city_df$pop, 0.99)
+
+      p_ridge_cities <- pop_city_df %>%
+        mutate(city = forcats::fct_reorder(city, pop, median)) %>%
+        ggplot(aes(x = pop, y = forcats::fct_rev(city), fill = factor(after_stat(quantile)))) +
+        stat_density_ridges(
+          geom = "density_ridges_gradient", calc_ecdf = TRUE,
+          quantiles = 1:4/5, quantile_lines = FALSE,
+          alpha = 0.6, scale = 0.9
+        ) +
+        scale_x_continuous(limits = c(0, x_max)) +
+        scale_y_discrete(expand = expansion(0.05)) +
+        scale_fill_manual(
+          name = "Percentile",
+          values = c('#ECEB72', '#D4BE62', '#BD9252', '#A56542', '#8E3933'),
+          labels = c("0-20th", "20-40th", "40-60th", "60-80th", "80-100th")
+        ) +
+        labs(x = "Population density (people/hectare)",
+             title = "Population density by corridor city") +
+        theme_minimal() +
+        theme(
+          axis.title.y = element_blank(),
+          legend.position = "bottom",
+          panel.grid.major = element_line(linewidth = .125, color = "dark gray"),
+          panel.grid.minor = element_blank()
+        )
+
+      ggsave(here("03-render-output", "plots", "worldpop-pop-density-cities-ridge.png"),
+             plot = p_ridge_cities, width = 8, height = 6, dpi = 300)
+      p_ridge_cities
+    }
+  }
+}, error = function(e) message("Multi-city ridge plot failed: ", e$message))
 ```
 
 ### Population Density

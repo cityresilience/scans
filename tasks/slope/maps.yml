@@ -1,2 +1,3 @@
 layers:
   - slope
+aggregate_fun: mean

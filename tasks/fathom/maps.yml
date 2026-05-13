@@ -3,6 +3,7 @@ layers:
   - pluvial
   - coastal
   - combined_flooding
+min_coverage: 0.1
 depends:
   - worldpop
   - wsf

@@ -1,2 +1,2 @@
 custom:
-  - core/R/map-building-footprints.R
+  - core/R/plot-building-footprints.R

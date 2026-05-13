@@ -2,3 +2,4 @@ layers:
   - elevation
 custom:
   - core/R/map-elevation.R
+aggregate_fun: mean

@@ -1,2 +1,9 @@
 layers:
   - land_cover
+aggregate_fun: modal
+aggregate_mode: hexbin
+aggregate_size: 2400
+
+smoothing:
+  method: modal
+  window: 3

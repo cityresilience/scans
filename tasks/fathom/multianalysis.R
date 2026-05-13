@@ -101,7 +101,12 @@ gather_flood_data <- function(flood_type) {
   if (is.null(wsf_flood)) return(NULL)
   col_name <- paste0(flood_type, "_2020")
   if (flood_type == "combined") col_name <- "comb_2020"
-  if (!col_name %in% names(wsf_flood)) return(tibble(year = wsf_flood_base$year, exposed_km2 = 0))
+  if (!col_name %in% names(wsf_flood)) return(tibble(
+    year = wsf_flood_base$year,
+    cumulative_sq_km = wsf_flood_base$cumulative_sq_km,
+    exposed_km2 = 0,
+    percent_exposed = scales::percent(0, accuracy = 0.01)
+  ))
   wsf_flood %>%
     select(year, cumulative_sq_km, exposed_km2 = all_of(col_name)) %>%
     filter(!is.na(exposed_km2)) %>%
@@ -174,44 +179,45 @@ calculate_flood_by_prob <- function(flood_tif, wsf_tif, output_file = NULL) {
   flood_r <- project(flood_r, utm_crs, method = "near")
   wsf_r <- project(wsf_r, flood_r, method = "near")
 
-  wsf_vals <- values(wsf_r)[, 1]
-  pixel_area_sqkm <- prod(res(flood_r)) / 1e6
-
-  # Read each RP band by matching band name
+  # Work at native resolution via terra::freq (streams, no values() dump).
+  # Aggregating WSF with fun="min" over-attributes whole blocks to the earliest
+  # sub-pixel year, which inflated the 2016 step after harmonization.
+  pixel_area_sqkm <- prod(res(wsf_r)) / 1e6
   band_names <- names(flood_r)
-  rp_vals <- list()
-  for (rp_name in names(rp_col_map)) {
-    idx <- which(band_names == rp_name)
-    if (length(idx) > 0) {
-      rp_vals[[rp_col_map[[rp_name]]]] <- values(flood_r)[, idx[1]]
+
+  # Year-count vector helper: freq df → named counts aligned to `years`
+  to_year_counts <- function(fq, years) {
+    out <- setNames(rep(0, length(years)), as.character(years))
+    if (nrow(fq) > 0) for (i in seq_len(nrow(fq))) {
+      y <- suppressWarnings(as.integer(fq$value[i]))
+      if (!is.na(y) && as.character(y) %in% names(out)) {
+        out[as.character(y)] <- out[as.character(y)] + fq$count[i]
+      }
     }
+    out
   }
 
-  wsf_max <- max(wsf_vals, na.rm = TRUE)
-  years <- 1985:floor(wsf_max)
+  wsf_max <- floor(as.numeric(global(wsf_r, "max", na.rm = TRUE)[1, 1]))
+  years <- 1985:wsf_max
+
+  # Per RP band: cumulative exposed-built-up km² by year
+  per_rp <- list()
+  for (rp_name in names(rp_col_map)) {
+    idx <- which(band_names == rp_name)
+    if (length(idx) == 0) next
+    flood_bin <- flood_r[[idx[1]]] > 0
+    exposed_years <- ifel(flood_bin, wsf_r, NA)
+    fq <- as.data.frame(freq(exposed_years))
+    per_rp[[rp_col_map[[rp_name]]]] <- round(cumsum(to_year_counts(fq, years)) * pixel_area_sqkm, 2)
+  }
+
   results <- list()
-
-  for (yr in years) {
-    built_mask <- wsf_vals <= yr & !is.na(wsf_vals)
+  for (i in seq_along(years)) {
+    yr <- years[i]
     row_data <- list(year = yr - 1984, yearName = yr)
-
-    for (col_name in names(rp_vals)) {
-      band_v <- rp_vals[[col_name]]
-      exposed_mask <- built_mask & band_v > 0 & !is.na(band_v)
-      row_data[[col_name]] <- round(sum(exposed_mask, na.rm = TRUE) * pixel_area_sqkm, 2)
-    }
-
-    # Total = same as 1-in-1000 (widest net)
-    # if (!is.null(rp_vals[["0.1-1%"]])) {
-    #   total_v <- rp_vals[["0.1-1%"]]
-    if (!is.null(rp_vals[["1-in-1,000 year"]])) {
-      total_v <- rp_vals[["1-in-1,000 year"]]
-      total_mask <- built_mask & total_v > 0 & !is.na(total_v)
-      row_data[["total"]] <- round(sum(total_mask, na.rm = TRUE) * pixel_area_sqkm, 2)
-    } else {
-      row_data[["total"]] <- 0
-    }
-
+    for (col_name in names(per_rp)) row_data[[col_name]] <- per_rp[[col_name]][i]
+    # Total = widest net (1-in-1,000yr)
+    row_data[["total"]] <- per_rp[["1-in-1,000 year"]][i] %||% 0
     results[[length(results) + 1]] <- row_data
   }
 
@@ -237,29 +243,40 @@ calculate_flood_total <- function(flood_tif, wsf_tif, output_file = NULL) {
   flood_r <- project(flood_r, utm_crs, method = "near")
   wsf_r <- project(wsf_r, flood_r, method = "near")
 
-  flood_vals <- values(flood_r)[, 1]
-  wsf_vals <- values(wsf_r)[, 1]
-  pixel_area_sqkm <- prod(res(flood_r)) / 1e6
+  # Native-res streaming via terra::freq — see calculate_flood_by_prob
+  pixel_area_sqkm <- prod(res(wsf_r)) / 1e6
 
-  wsf_max <- max(wsf_vals, na.rm = TRUE)
-  years <- 1985:floor(wsf_max)
-  results <- list()
-
-  for (yr in years) {
-    built_mask <- wsf_vals <= yr & !is.na(wsf_vals)
-    total_built_sqkm <- sum(built_mask, na.rm = TRUE) * pixel_area_sqkm
-    exposed_mask <- built_mask & flood_vals > 0 & !is.na(flood_vals)
-    exposed_sqkm <- sum(exposed_mask, na.rm = TRUE) * pixel_area_sqkm
-
-    results[[length(results) + 1]] <- list(
-      Year = yr,
-      uba_km2 = round(total_built_sqkm, 2),
-      uba_km2_exposed = round(exposed_sqkm, 2),
-      percent_uba_exposed = scales::percent(exposed_sqkm / total_built_sqkm, accuracy = 0.01)
-    )
+  to_year_counts <- function(fq, years) {
+    out <- setNames(rep(0, length(years)), as.character(years))
+    if (nrow(fq) > 0) for (i in seq_len(nrow(fq))) {
+      y <- suppressWarnings(as.integer(fq$value[i]))
+      if (!is.na(y) && as.character(y) %in% names(out)) {
+        out[as.character(y)] <- out[as.character(y)] + fq$count[i]
+      }
+    }
+    out
   }
 
-  result_df <- bind_rows(results)
+  wsf_max <- floor(as.numeric(global(wsf_r, "max", na.rm = TRUE)[1, 1]))
+  years <- 1985:wsf_max
+
+  # All built-up by year
+  fq_all <- as.data.frame(freq(wsf_r))
+  all_counts <- to_year_counts(fq_all, years)
+  cum_all <- cumsum(all_counts) * pixel_area_sqkm
+
+  # Exposed built-up by year (where flood max-prob band > 0)
+  flood_bin <- flood_r[[1]] > 0
+  fq_exp <- as.data.frame(freq(ifel(flood_bin, wsf_r, NA)))
+  exp_counts <- to_year_counts(fq_exp, years)
+  cum_exp <- cumsum(exp_counts) * pixel_area_sqkm
+
+  result_df <- tibble(
+    Year = years,
+    uba_km2 = round(cum_all, 2),
+    uba_km2_exposed = round(cum_exp, 2),
+    percent_uba_exposed = scales::percent(cum_exp / cum_all, accuracy = 0.01)
+  )
   if (!is.null(output_file)) {
     write_csv(result_df, output_file)
     message("Saved to: ", output_file)

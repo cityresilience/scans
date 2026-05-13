@@ -1,5 +1,6 @@
 layers:
   - forest
   - deforest
+min_coverage: 0.1
 custom:
   - core/R/map-deforestation.R

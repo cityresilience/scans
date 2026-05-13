@@ -2,3 +2,4 @@ layers:
   - air_quality
   - air_quality_local
   - air_quality_trend
+aggregate_fun: mean

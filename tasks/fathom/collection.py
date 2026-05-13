@@ -372,6 +372,10 @@ def datacollection(
         for year in flood_years:
 
             if year <= 2020:
+                out_tif = f"{spatial_dir}/{city_name}_{ft}_{year}.tif"
+                if exists(out_tif):
+                    logger.info(f"  skip — {ft} {year}: {os.path.basename(out_tif)} exists")
+                    continue
                 try:
                     _process_year(
                         ft, year, None, flood_rps, lat_tiles, lon_tiles,
@@ -387,6 +391,10 @@ def datacollection(
 
             else:
                 for ssp in flood_ssps:
+                    out_tif = f"{spatial_dir}/{city_name}_{ft}_{year}_ssp{flood_ssp_labels[ssp]}.tif"
+                    if exists(out_tif):
+                        logger.info(f"  skip — {ft} {year} SSP{ssp}: {os.path.basename(out_tif)} exists")
+                        continue
                     try:
                         _process_year(
                             ft, year, ssp, flood_rps, lat_tiles, lon_tiles,
@@ -429,6 +437,12 @@ def datacollection(
             ref_meta = ref.meta.copy()
             h, w = ref.height, ref.width
             ref_transform = ref.transform
+            ref_crs = ref.crs
+
+        # zambia: per-flood-type mosaics can land on slightly different grids
+        # (different tile inputs). Reproject onto the reference grid before
+        # stacking, otherwise np.maximum.reduce throws "inhomogeneous shape".
+        from rasterio.warp import reproject, Resampling
 
         merged_arrays = []
         band_descs = []
@@ -441,7 +455,22 @@ def datacollection(
             for p, idx in all_bands[desc]:
                 try:
                     with rasterio.open(p) as src:
-                        stack.append(src.read(idx).astype(np.float32))
+                        if (src.height == h and src.width == w
+                                and src.transform == ref_transform
+                                and src.crs == ref_crs):
+                            arr = src.read(idx).astype(np.float32)
+                        else:
+                            arr = np.zeros((h, w), dtype=np.float32)
+                            reproject(
+                                source=rasterio.band(src, idx),
+                                destination=arr,
+                                src_transform=src.transform,
+                                src_crs=src.crs,
+                                dst_transform=ref_transform,
+                                dst_crs=ref_crs,
+                                resampling=Resampling.max,
+                            )
+                        stack.append(arr)
                 except Exception:
                     continue
             if not stack:

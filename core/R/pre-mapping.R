@@ -206,6 +206,46 @@ if (!file.exists(file.path(spatial_dir, "wsf-tracker-edit.tif"))) {
   message("wsf-tracker-edit.tif already exists, skipping...")
 }
 
+# Lobito-only WSF harmonized hex layers ----------------------------------------
+# A) wsf_harmonized_recent_hex.gpkg — m² built since 2020 per hex (physical)
+# B) wsf_harmonized_q33_hex.gpkg — year by which 1/3 of hex's built area is reached
+# Saved as gpkg so the standard render plots them as SpatVector (skips re-hexing).
+recent_path <- file.path(spatial_dir, "wsf_harmonized_recent_hex.gpkg")
+if (!file.exists(recent_path)) {
+  message("Building wsf_harmonized_recent_hex.gpkg...")
+  wsf_harm <- fuzzy_read(spatial_dir, "wsf_harmonized\\.tif$")
+  if (inherits(wsf_harm, "SpatRaster")) {
+    wsf_recent <- ifel(wsf_harm >= 2020, 1, NA)
+    pixel_m2 <- as.numeric(terra::cellSize(wsf_recent, unit = "m")[1, 1])
+    hex_data <- hexbin_aggregate(wsf_recent, aoi, hex_size_m = 2400,
+      fun = function(values, coverage_fraction) {
+        built <- sum(coverage_fraction[!is.na(values)]) * pixel_m2
+        if (built == 0) NA_real_ else built
+      }, min_coverage = 0.1)
+    if (!is.null(hex_data) && nrow(hex_data) > 0) {
+      terra::writeVector(hex_data, recent_path, overwrite = TRUE)
+      message(paste("  Saved:", recent_path, "—", nrow(hex_data), "hexes"))
+    }
+  }
+} else {
+  message("wsf_harmonized_recent_hex.gpkg already exists, skipping...")
+}
+
+q33_path <- file.path(spatial_dir, "wsf_harmonized_q33_hex.gpkg")
+if (!file.exists(q33_path)) {
+  message("Building wsf_harmonized_q33_hex.gpkg...")
+  wsf_harm <- fuzzy_read(spatial_dir, "wsf_harmonized\\.tif$")
+  if (inherits(wsf_harm, "SpatRaster")) {
+    hex_data <- hexbin_aggregate(wsf_harm, aoi, hex_size_m = 2400, fun = "q33", min_coverage = 0.1)
+    if (!is.null(hex_data) && nrow(hex_data) > 0) {
+      terra::writeVector(hex_data, q33_path, overwrite = TRUE)
+      message(paste("  Saved:", q33_path, "—", nrow(hex_data), "hexes"))
+    }
+  }
+} else {
+  message("wsf_harmonized_q33_hex.gpkg already exists, skipping...")
+}
+
 message("Processing burn data...")
 if (!file.exists(file.path(spatial_dir, "burn-edit.tif"))) {
   burn <- fuzzy_read(spatial_dir, "lc_burn.tif$")
